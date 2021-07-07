@@ -1,0 +1,62 @@
+digraph {
+  node [ fontname="Handlee" ];
+  compound=true
+  subgraph cluster_frontend {
+    label="DART Adult Passage";
+    adult_annual [label="Adult Annual\nCounts"];
+    adult_daily [label="Adult Daily\nCounts"];
+  }
+      
+  subgraph cluster_backend {
+    label="R (local)";
+
+    subgraph cluster_annual {
+        fillcolor="#CFD8DC"
+        style="filled"
+        fontcolor="black"        
+        label="Create Annual Data"
+        annual_query [label="Query DART" shape=polygon];
+        generate_annual_summary [label="Generate Annual\nSummary File" shape=polygon];
+        geomean [label="Compute Geomeans" shape=polygon]
+    }
+    
+    subgraph cluster_daily{
+        fillcolor="#CFD8DC"
+        style="filled"
+        fontcolor="black"        
+        label="Create Daily Cumulative Data"
+        generate_daily_cums [label="Generate 10yr Mean\nDaily Cumulative Files\n(one for each day)" shape=polygon];
+        daily_query [label="Query DART" shape=polygon];        
+    }
+
+  }
+  
+  subgraph cluster_onefish {
+    label="OneFishTwoFish Website" 
+    cum_folder [shape=folder label="Cumulative\nFiles" fillcolor="#CFD8DC"
+    style="filled"
+    fontcolor="black"]
+    html [shape=rectangle label="HTML\nJavascript"]
+    csv [shape=rectangle label="CSV File" fillcolor="#CFD8DC"
+    style="filled" fontcolor="black"]
+  }
+  
+  subgraph cluster_browser {
+      label="Browser Actions"
+      load_page [label="Load Page"]
+      request_daily [label="Request Daily\nCounts"]
+  }
+
+  adult_annual -> annual_query [lhead=cluster_annual];
+  adult_daily -> daily_query  [lhead=cluster_daily]
+  daily_query -> generate_daily_cums
+  annual_query -> geomean
+  geomean -> generate_annual_summary
+  generate_daily_cums -> cum_folder[ltail=cluster_daily]
+  generate_annual_summary -> csv [ltail=cluster_annual]
+  html -> load_page
+  csv -> load_page
+  adult_annual -> load_page [label="current year\ncumulative counts"]
+  adult_daily -> request_daily [label="single year\ncounts,flow,temp"]
+  cum_folder -> load_page
+}
