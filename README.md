@@ -1,4 +1,5 @@
-# BPA Projects
+# Data Visualization Concepts for BPA
 
-# DamCounts
-![Dam Counts](damcounts/damcounts.Graphviz.png)
+Project |	Directory
+------------ | -------------
+Columbia Basin Dam Counts	| damcounts
