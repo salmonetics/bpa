@@ -15,17 +15,17 @@ m <- mongo(collection = "SpawnerAbundance", db = "Salmonetics",url = url_path,ve
 #remove existing records
 
 m$remove('{}')
+#m$remove('{"ext_datasource": "CAX"}')
 
-pops <- read.csv("ca-data-all 06-04-2020 15 26_Populations.csv",stringsAsFactors=FALSE)
+pops <- read.csv("ca-data-all 07-02-2021 Populations.csv",stringsAsFactors=FALSE)
 
-cax <- read.csv("ca-data-all 06-04-2020 15 26_NOSA.csv",stringsAsFactors=FALSE)
-cax$VALIDATIONDATE <- mdy_hm(cax$VALIDATIONDATE)
-cax$SNLOADDATE <- mdy_hm(cax$SNLOADDATE)
-cax$LASTMODIFIEDDATE <- mdy_hm(cax$LASTMODIFIEDDATE)
-cax$DATASETVERSION <- mdy_hm(cax$DATASETVERSION)
-cax$HLI_LASTUPDATED <- mdy_hm(cax$HLI_LASTUPDATED)
-cax$LASTUPDATED <- mdy_hm(cax$LASTUPDATED)
-cax$UPDDATE <- mdy_hm(cax$UPDDATE)
+cax <- read.csv("ca-data-all 07-02-2021 NOSA.csv",stringsAsFactors=FALSE)
+cax$SNLOADDATE <- ymd_hms(cax$SNLOADDATE)
+cax$LASTMODIFIEDON <- ymd_hms(cax$LASTMODIFIEDON)
+cax$DATASETVERSION <- ymd_hm(cax$DATASETVERSION)
+cax$HLI_LASTUPDATED <- ymd_hms(cax$HLI_LASTUPDATED)
+cax$LASTUPDATED <- ymd_hms(cax$LASTUPDATED)
+cax$UPDDATE <- ymd_hms(cax$UPDDATE)
 cax <- arrange(cax,SPAWNINGYEAR,desc(LASTUPDATED))
 cax$ext_datasource <- "CAX"
 
@@ -41,13 +41,13 @@ sps$ext_datasource <- "SPS"
 m$insert(sps)
 
 
-#m$remove('{"EXT_DATASOURCE": "CAX"}')
+#m$remove('{"ext_datasource": "CAX"}')
 
 #set timeseries flag to false
 m$update('{}', '{"$set":{"timeseries": false}}', multiple = TRUE)
 
 #read bestdata file
-bestdata <- read.csv("SpawnerBestData_06-8-2020.csv",stringsAsFactors=F)
+bestdata <- read.csv("SpawnerBestData_07-02-2021.csv",stringsAsFactors=F)
 #loop through and set timeseries=T
 for(i in 1:nrow(bestdata)){
   print(bestdata$QUERY[i])
