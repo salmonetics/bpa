@@ -1,0 +1,1026 @@
+<html>
+  <head>
+  <style>
+.popuptable{
+	font-size: 12;
+}
+#chart-year .x.axis text {
+	text-anchor: end !important;;
+	transform: rotate(-45deg);
+	font-size: 12;
+}
+
+#redds-year .x.axis text {
+	text-anchor: end !important;;
+	transform: rotate(-45deg);
+	font-size: 12;
+}
+
+.leaflet-popup-content { width:500px; }	
+img.leaflet-tile{
+	pointer-events: none;
+}
+.action_marker{
+	pointer-events: all;
+	cursor: pointer;
+}	
+#leafmap{
+	width: 800px;
+	height: 700px;	
+}	
+.dataicon{
+	width: 200px;
+	height: 200px;	
+}
+
+.damicon i{
+	width: 6px;
+	height: 6px;
+	float: left;
+	margin-right: 5px;
+}	
+
+.control {margin:5px;}
+#datarow {
+	height: 300px;
+	overflow: scroll;
+}
+
+
+#spinner * { 
+	filter: none; 
+	-moz-opacity: 100%; 
+	position: absolute;
+	top: 200px;
+	left: 650px;
+}
+	
+div.tooltip {   
+  position: absolute;           
+  text-align: left;                            
+  padding: 2px;             
+  font: 16px sans-serif;        
+  background: #fff;   
+  border: 0px;      
+  border-radius: 8px;           
+  pointer-events: none;         
+}
+
+svg	{ overflow: hidden; }
+	
+	table {
+	margin: 10px;
+	padding-top: 2px;
+    padding-right: 10px;
+    padding-bottom: 2px;
+    padding-left: 10px;
+	}
+	
+.dc-table-label {
+font-weight: bold;
+}
+
+.header th {
+text-align: center;	
+}
+
+.tiptable {
+	font: 12px sans-serif;
+}
+
+.axis path, .axis line {
+    fill: none;
+    shape-rendering: crispedges;
+    stroke: #000000;
+}
+.grid .tick {
+    stroke: grey;
+    opacity: 0.5 !important;
+}
+.bar rect {
+        fill: #ed1e79;
+    }
+
+    .bar text.value {
+        fill: black;
+    }
+    circle {
+    fill: none;
+    stroke: black; 
+    stroke-width: 1;
+}
+
+.brush .extent {
+  stroke: #fff;
+  fill-opacity: .125;
+  shape-rendering: crispEdges;
+}
+
+text {
+  cursor: default;
+}
+
+path.line:hover{
+	stroke-width: 2px;
+}
+
+.background path {
+  fill: none;
+  stroke: #ddd;
+  shape-rendering: crispEdges;
+}
+
+.foreground path {
+  fill: none;
+  stroke: steelblue;
+}
+
+.brush .extent {
+  fill-opacity: .3;
+  stroke: #fff;
+  shape-rendering: crispEdges;
+}
+
+.axis line,
+.axis path {
+  fill: none;
+  stroke: #000;
+  shape-rendering: crispEdges;
+}
+
+.axis text {
+  text-shadow: 0 1px 0 #fff, 1px 0 0 #fff, 0 -1px 0 #fff, -1px 0 0 #fff;
+  cursor: move;
+}
+
+input[type=range],
+	::-moz-range-track,
+	 ::-ms-track {
+	 -webkit-appearance: none;
+	 background-color: 3f91e5;
+	 width: 400px;
+	 height:40px;
+}
+
+input.vertical {
+	-webkit-appearance: slider-vertical;
+	writing-mode: bt-lr;
+}
+  </style>
+<script src="https://s3.amazonaws.com/stitch-sdks/js/bundles/4.6.0/stitch.js"></script>
+<script src="https://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+<script type="text/javascript" src="/script/dc.js/colorbrewer.js"></script>
+<script>
+
+var params = {
+	include: {
+		hatchery: false,
+		jacks: false,
+		NOSAEJ: true,
+		NOSAIJ: true,
+		TSAIJ: true,
+		TSAEJ: true
+	},
+	popid: 1,
+	geomean: 
+		{
+			variable: "NOSAEJ",
+			span: 5
+		}
+}
+
+function MongoConnector(appclient, database, collection){
+	this.client = stitch.Stitch.initializeDefaultAppClient(appclient);
+	this.database = this.client.getServiceClient(stitch.RemoteMongoClient.factory, 'mongodb-atlas').db(database);
+	this.user = this.client.auth.loginWithCredential(new stitch.AnonymousCredential());
+	this.collection = collection;
+}
+
+//const m = new MongoConnector("salmo1-kulug","Salmonetics","SpawnerAbundance")
+
+MongoConnector.prototype.getSpawnerAbundanceSinglePop = function(popid,yearmin,yearmax,fxns){
+	this.user.then(user => this.database.collection(this.collection).find({POPID: popid}).asArray())
+	.then(docs => {
+	  docs = docs.filter(function(d){return d.SPAWNINGYEAR >= yearmin & d.SPAWNINGYEAR <= yearmax});
+	  params.data = docs
+	  //docs.forEach(function(d){console.log(d)})
+	  fxns.forEach(function(fxn){
+		fxn(docs)
+	  })
+	})
+	.catch(err => {
+		console.error(err)
+	});
+	//return this.collection.find({POPID: popid}, { limit: 100}).asArray()
+}
+
+function processData(docs){
+	docs.forEach(function(d){		
+		if(d.ext_datasource == "SPS"){
+			d.TSAIJ = +d.Spawners;
+			if(d.FracWild > 0){
+				d.FracWild = +d.FracWild
+				d.NOSAIJ = Math.round(+d.Spawners*d.FracWild);
+			}
+			if(d.SPECIES == "Chinook salmon" & d.Age_3_Returns >0){
+				d.TSAEJ = Math.round(d.Spawners * (1-d.Age_3_Returns));
+				if(d.FracWild > 0){
+					d.NOSAEJ = Math.round(d.Spawners*d.FracWild * (1-d.Age_3_Returns));
+				}
+			}
+			for(i=1;i<8;i++){
+				if(d["Age_" + i + "_Returns"]>0)d["AGE" + i + "PROP"] = d["Age_" + i + "_Returns"];
+			}			
+		}
+		d.NOSAIJ = +d.NOSAIJ
+		d.NOSAEJ = +d.NOSAEJ
+		d.TSAIJ = +d.TSAIJ
+		d.TSAEJ = +d.TSAEJ
+	})
+
+}
+
+
+
+function test(){
+  const client = stitch.Stitch.initializeDefaultAppClient('salmo1-kulug');
+
+  const db = client.getServiceClient(stitch.RemoteMongoClient.factory, 'mongodb-atlas').db('Salmonetics');
+
+  client.auth.loginWithCredential(new stitch.AnonymousCredential()).then(user =>
+    db.collection('SpawnerAbundance').find({NMFS_POPID: 7}).asArray()
+  ).then(docs => {
+      console.log("Found docs", docs)
+      console.log("[MongoDB Stitch] Connected to Stitch")
+  }).catch(err => {
+    console.error(err)
+  });
+  
+}
+
+listYears = function(data){
+	yeardata = [], yearstring = '';
+	data.forEach(function(d){
+		yeardata.push(d.SPAWNINGYEAR)
+		//yeardata.push(d)
+	})
+	yeardata.sort(function(a,b){return a-b});
+	var span = false;
+	for(i=1;i<yeardata.length;i++){
+		if(yeardata[i] != yeardata[i-1] + 1){
+			yearstring += yeardata[i-1] + ",";
+			span = false;
+		}
+		else if(!span){
+			yearstring += yeardata[i-1] + "-";
+			span = true;
+		}
+		if(i == yeardata.length-1)yearstring += yeardata[i]
+	}
+	if(yeardata.length==1)return yeardata[0]
+	return yearstring;
+}
+
+function showMethodTable(_data){
+	var data = d3.nest()
+		.key(function(d) { return d.CONTACTAGY; })
+		.key(function(d) { return '<a href="' + d.PROTMETHURL + '" target="_new">' + '<b>#' + d.METHODNUMBER + '</b> ' + d.PROTMETHNAME + ' (' + d.METHODADJUSTMENTS + ')</a>'; })
+		.entries(_data.filter(function(d){return d.ext_datasource != "SPS"}), d3.map)
+		
+		var fields = ["Agency","Method (adjustments)","Years"];
+		var widths = [50,700,100]
+		
+	var div = d3.select("#popdivs").append("div")
+	div.append("h3").html("Methods")
+	var table = div.append("table")
+	table.attr("class","methodstable")
+	table.attr("cellpadding",3)
+	table.property("border",1)		
+	var tr = table.append("tr")
+	fields.forEach(function(d){tr.append("th").property("width",widths[d]).html(d)});
+	data.forEach(function(agency){
+		var tr = table.append("tr")
+		tr.property("valign","top")
+		var td = tr.append("td").property("align","left")
+			td.attr("rowspan",agency.values.length+1)
+			td.html(agency.key)
+		agency.values.forEach(function(method){
+			var tr1 = table.append("tr")
+			var td1 = tr1.append("td").property("align","left").html(method.key)
+			td1.attr("width",700)
+			tr1.append("td").property("align","left").html(listYears(method.values))
+		})
+	})
+	//console.log(data)
+			
+}
+
+var getBarData = function(data){
+	var NOSAIJ = [], NOSAEJ = [], TSAIJ = [], TSAEJ = [];
+	data.forEach(function(d){
+			if(d.NOSAIJ>0 & params.include.NOSAIJ)NOSAIJ.push({year: d.SPAWNINGYEAR, count: d.NOSAIJ, data: d, timeseries: d.timeseries})
+			else console.log("excluding NOSAIJ " + d.NOSAIJ)
+			if(d.NOSAEJ>0)NOSAEJ.push({year: d.SPAWNINGYEAR, count: d.NOSAEJ, data: d, timeseries: d.timeseries})
+			else console.log("excluding NOSAEJ " + d.NOSAEJ)
+			if(d.TSAIJ>0 & params.include.TSAIJ)TSAIJ.push({year: d.SPAWNINGYEAR, count: d.TSAIJ, data: d, timeseries: d.timeseries})
+			else console.log("excluding TSAIJ " + d.TSAIJ)
+			if(d.TSAEJ>0 & params.include.TSAEJ)TSAEJ.push({year: d.SPAWNINGYEAR, count: d.TSAEJ, data: d, timeseries: d.timeseries})				
+			else console.log("excluding TSAEJ " + d.TSAEJ)
+		//}
+	})
+	return {NOSAEJ: NOSAEJ, NOSAIJ: NOSAIJ, TSAEJ: TSAEJ, TSAIJ: TSAIJ}
+}
+
+//doBars = function(x,y,height,width,target,bdata,type,index){
+doBars = function(target,bdata,x,y,options){
+	var height = options.height ? options.height:120,
+	width = options.width ? options.width:800,
+	index = options.index ? options.index:0,
+	name = options.name ? options.name : "TSAIJ",
+	fillFxn = options.fillFxn ? options.fillFxn : function(d){return "#cccccc"},
+	strokeFxn = options.strokeFxn ? options.strokeFxn : function(d){return d.timeseries ? "red" : "#999999"},
+	hoverFxn = options.hoverFxn ? options.hoverFxn : function(d){
+		function popupTable(d){
+			var limits = function(field){
+				var limitstring = "";
+				if(d.data[field+"LOWERLIMIT"]>0 & d.data[field+"UPPERLIMIT"]>0)limitstring = " (" + d.data[field+"LOWERLIMIT"] + "-" + d.data[field+"UPPERLIMIT"] + ")";
+				return limitstring;
+			}
+			
+			var html = '<table width="400" border="1" cellpadding="5">'
+			html += '<tr><th align="left" valign="top">Year</th><td align="left" valign="top">' + d.year + '</td></tr>';
+			html += '<tr><th align="left" valign="top">TSAIJ</th><td align="left" valign="top">' + d.data.TSAIJ + limits("TSAIJ") + '</td></tr>';
+			html += '<tr><th align="left" valign="top">TSAEJ</th><td align="left" valign="top">' + d.data.TSAEJ + limits("TSAEJ") + '</td></tr>';
+			html += '<tr><th align="left" valign="top">NOSAIJ</th><td align="left" valign="top">' + d.data.NOSAIJ + limits("NOSAIJ") + '</td></tr>';
+			html += '<tr><th align="left" valign="top">NOSAEJ</th><td align="left" valign="top">' + d.data.NOSAEJ + limits("NOSAEJ") + '</td></tr>';
+			html += '<tr><td colspan="2"><svg id="popuptable_timeline" width="390" height="50"></svg></table>'
+			return html;
+		}
+		
+		tipdiv.transition()        
+		.duration(20)      
+		.style("opacity", 1);      
+		tipdiv.html(popupTable(d))
+			.style("left", (d3.event.pageX + 20) + "px")     
+			.style("top", (d3.event.pageY - 14) + "px");
+	
+	};
+	
+  target
+  .append("g")
+   .attr("class",function(d){
+	return name + " ts" + index ;
+  }) 
+  .selectAll("rect")
+  .data(bdata)
+  .enter()
+  .append("rect")
+  .attr("width", .75*(x(2000)-x(1999)))
+  .attr("x", function(d) { 
+	var _x = x(d.year) - .375*(x(d.year+1)-x(d.year));
+	return(_x);
+	})
+  .attr("y", function(d) {
+	return y(d.count);
+  })
+  .attr("height", function(d) {
+	var h = height - y(d.count); 
+	return h; })
+
+  .style("fill", fillFxn)
+  .style("stroke",strokeFxn)
+  .on("mouseover", hoverFxn)                  
+  .on("mouseout", function(d) {       
+		tipdiv.transition()        
+			.duration(20)      
+			.style("opacity", 0);
+		//d3.selectAll(".curse").remove();
+
+  })			
+}
+
+function geomean(data,year,name,span,minyears){
+	var gdata = data.filter(function(d){return d.SPAWNINGYEAR > year - span})
+		.filter(function(d){return d.SPAWNINGYEAR <= year})
+		.filter(function(d){return d[name] > 0})
+	if(gdata.length < minyears)return -99;
+	else{
+		return Math.exp(d3.mean(gdata,function(d){return Math.log(d[name])}))
+	}
+}
+
+function setGeomeans(data,name,span,minyears){
+	data.forEach(function(d){
+		d[name + "geomean" + span] = geomean(data,d.SPAWNINGYEAR,name,span,minyears)
+	})
+}
+
+function showGeomean(target,x,y,data,geoname){
+	var geoline = d3.svg.line()
+    .x(function (d) { return x(d.year);})
+    .y(function (d){ return y(d.geomean)})
+    .interpolate("linear");
+
+	var geos = target.append("g").attr("class", geoname);
+	var gdata = [];
+	data.forEach(function (d) {
+		if(d[geoname]>0)gdata.push({year: d.SPAWNINGYEAR, geomean: d[geoname]});
+		});
+	gdata.sort(function(a,b){return a.year-b.year})
+	geos.append("path")
+    .attr("class", "line")
+    .attr("d", function (d) {
+		return geoline(gdata);
+	})
+	.style("stroke", "black")
+    .style("fill", "none")
+    .style("stroke-width", 1);
+}
+
+function showBest(_data){
+	var data = _data.filter(function(d){return d.timeseries});
+	var minyear = d3.min(_data,function(d){return d.SPAWNINGYEAR;})
+	var maxyear = d3.max(_data,function(d){return d.SPAWNINGYEAR;})
+	var max = d3.max(_data,function(d){
+		//console.log(d)
+		var max=0;
+		//if(d.ext_datasource == "SPS")max = d.Spawners;
+		//else{
+			if(d.TSAIJ>0 & params.include.TSAIJ){
+				if(d.TSAIJ > max)max = d.TSAIJ
+			}
+			if(d.TSAEJ>0 & params.include.TSAEJ){
+				if(d.TSAEJ > max)max = d.TSAEJ
+			}
+			if(d.NOSAIJ>0 & params.include.NOSAIJ){
+				if(d.NOSAIJ > max)max = d.NOSAIJ
+			}
+			if(d.NOSAEJ>0){
+				if(d.NOSAEJ > max)max = d.NOSAEJ
+			}
+		//}
+		return max;
+	});
+	
+	setGeomeans(data,"TSAIJ",5,4)
+	setGeomeans(data,"TSAIJ",10,8)
+	setGeomeans(data,"TSAEJ",5,4)
+	setGeomeans(data,"TSAEJ",10,8)
+	setGeomeans(data,"NOSAIJ",5,4)
+	setGeomeans(data,"NOSAIJ",10,8)	
+	setGeomeans(data,"NOSAEJ",5,4)
+	setGeomeans(data,"NOSAEJ",10,8)	
+	
+	console.log(data)
+	
+	var bardata = getBarData(data);
+	
+	console.log(bardata)
+	
+	var width = 800, height = 120
+	var margin = {top: 5, left: 80, right: 20, bottom: 20}
+	
+	var x = d3.scale.linear().domain([minyear-1,maxyear+1]).range([0, width]),
+	y = d3.scale.linear().domain([0, max]).range([height,0]);
+
+	var xAxis = d3.svg.axis().scale(x).orient("bottom").tickFormat(d3.format("d"));
+	var yAxis = d3.svg.axis().scale(y).orient("left");
+
+	var div = d3.select("#popdivs").append("div")
+	div.html("<b>Composite Timeseries</b><br/>")
+	//console.log(bardata)
+	var svg1 = div.append("svg")
+	.attr("width", width + margin.left + margin.right)
+	.attr("height", height + margin.top + margin.bottom);
+	
+	var svg2 = svg1.append("g")
+			.attr("class", "main")
+			.attr("transform", "translate(" + margin.left + "," + margin.top + ")");		
+			
+	svg2.append("g")
+			.attr("class", "y axis")
+			.call(yAxis)
+			.append("text")
+			.attr("transform", "rotate(-90)")
+			.attr("y", 6)
+			.attr("dy", ".71em")
+			.style("text-anchor", "end");
+			
+	svg2.append("g")
+		.attr("class", "x axis")
+		.attr("transform", "translate(0," + height + ")")
+		.call(xAxis);
+		
+	var bars = svg2.append("g").attr("class", "bars");
+
+	["TSAIJ","TSAEJ","NOSAIJ","NOSAEJ"].forEach(function(name){
+		var options = {
+			index: 99,
+			name: name,
+			fillFxn: function(dd){
+				var colorfxn = d3.scale.ordinal().domain(["dummy","NOSAEJ","NOSAIJ","TSAEJ","TSAIJ"].reverse()).range(colorbrewer.Blues[5]);
+				return colorfxn(name)
+			},
+			strokeFxn: function(dd){return "#999999"}
+		}
+		doBars(bars,bardata[name],x,y,options)
+	})
+	
+	showGeomean(bars,x,y,data,"NOSAEJgeomean5")
+	
+	svg1
+	.append("image")
+      .attr("xlink:href", "download.png")
+      .attr("width", 20)
+      .attr("height", 20)
+      .attr("x", width + margin.left + margin.right-20)
+      .attr("y", height + margin.top + margin.bottom-124)
+	  .attr("class", "download")
+	  .style("cursor","pointer")
+	  .on("mouseover", function(d) {
+            tipdiv.transition()        
+                .duration(20)      
+                .style("opacity", 1);      
+            tipdiv.html("Download Data")  
+                .style("left", (d3.event.pageX + 20) + "px")     
+                .style("top", (d3.event.pageY - 10) + "px");    
+        })                  
+	  .on("mouseout", function(d) {       
+            tipdiv.transition()        
+                .duration(20)      
+                .style("opacity", 0);   
+		})
+	  .on("click", function(d){	
+			filename = "Pop" + data[0].POPID + "_Composite.csv"
+			writeCSV(data,filename)
+		})
+	
+	div.append("hr")	
+	
+}
+
+function showTimeseries(_data){
+	var minyear = d3.min(_data,function(d){return d.SPAWNINGYEAR;})
+	var maxyear = d3.max(_data,function(d){return d.SPAWNINGYEAR;})
+	var colorfxn = d3.scale.ordinal().domain(["dummy","NOSAEJ","NOSAIJ","TSAEJ","TSAIJ"].reverse()).range(colorbrewer.Blues[5]);
+	
+	var data = d3.nest()
+		.key(function(d) { return d.ext_datasource; 
+		})
+		.key(function(d) {
+			if(d.ext_datasource == "SPS") return d.CONTACTAGENCY;
+			else return d.CONTACTAGY; 
+		})
+		.key(function(d) {
+			if(d.ext_datasource == "SPS") return "NA";
+			else return d.POPFIT; 
+		})
+		.key(function(d) {
+			if(d.ext_datasource == "SPS") return "1";
+			else return d.METHODNUMBER.toString(); 
+		})
+		.entries(_data, d3.map)
+		
+		var timeseries = []
+		
+		var getMax = function(dsource,values){
+			var max = 0
+			values.forEach(function(d){
+				d.SPAWNINGYEAR = +d.SPAWNINGYEAR;
+				//if(dsource=="SPS"){
+					//if(d.Spawners > max) max = d.Spawners
+				//}
+				//else{
+					if(d.TSAIJ>0 & params.include.TSAIJ){
+						if(d.TSAIJ > max)max = d.TSAIJ
+					}
+					if(d.TSAEJ>0 & params.include.TSAEJ){
+						if(d.TSAEJ > max)max = d.TSAEJ
+					}
+					if(d.NOSAIJ>0 & params.include.NOSAIJ){
+						if(d.NOSAIJ > max)max = d.NOSAIJ
+					}
+					if(d.NOSAEJ>0){
+						if(d.NOSAEJ > max)max = d.NOSAEJ
+					}
+				//}
+			});
+			return max;
+		}
+		
+		var popmax = 0
+		
+		data.forEach(function(dsource){
+			dsource.values.forEach(function(agency){
+				agency.values.forEach(function(popfit){
+					popfit.values.forEach(function(method){
+						localmax = getMax(dsource.key,method.values)
+						if(localmax > popmax)popmax = localmax
+						timeseries.push({dsource:dsource.key,agency: agency.key, popfit: popfit.key, method: method.key, values: method.values, max: localmax})
+					})
+				})
+			})
+		})
+		
+		console.log(timeseries)
+		
+		var width = 800, height = 120
+		var margin = {top: 5, left: 80, right: 10, bottom: 20}
+		
+		var x = d3.scale.linear().domain([minyear-1,maxyear+1]).range([0, width]),
+		y = d3.scale.linear().domain([0, popmax]).range([height,0]);
+
+		var xAxis = d3.svg.axis().scale(x).orient("bottom").tickFormat(d3.format("d"));
+		var yAxis = d3.svg.axis().scale(y).orient("left");
+		
+		
+		
+		var addRowData = function(row,rowdata){
+			row.append("th").property("width",100).property("align","right").html("Source:")
+			row.append("td").property("width",50).property("align","left").html(rowdata.dsource)
+			row.append("th").property("width",100).property("align","right").html("Agency:")
+			row.append("td").property("width",50).property("align","left").html(rowdata.agency)
+			row.append("th").property("width",100).property("align","right").html("POPFIT:")
+			row.append("td").property("width",50).property("align","left").html(rowdata.popfit)
+			row.append("th").property("width",100).property("align","right").html("Method#:")
+			row.append("td").property("width",50).property("align","left").html(rowdata.method)			
+		}
+		
+		function doTimeline(d){
+			var svg = d3.select("#popuptable_timeline")
+			var margin = {top: 0, left: 80, right: 5, bottom: 20}
+			var width = svg.attr("width")-margin.left-margin.right, height = svg.attr("height")-margin.top-margin.bottom;
+			var times = [d.data]
+		
+			var x = d3.scale.linear().domain([minyear-1,maxyear+1]).range([0, width]),
+			y = d3.scale.linear().domain([0, popmax]).range([height,0]);
+
+			var xAxis = d3.svg.axis().scale(x).orient("bottom").tickFormat(d3.format("d"));
+			var yAxis = d3.svg.axis().scale(y).orient("left");			
+		}
+		
+		function colorType(type, index){
+			var types = ["TSAIJ","TSAEJ","NOSAIJ","NOSAEJ"]
+			var current = types.indexOf(type)
+			for(i=current+1;i<types.length;i++){
+				
+			}
+		}
+		
+		timeseries.forEach(function(ts,i){
+			var div = d3.select("#popdivs").append("div")
+			var table = div.append("table")
+			table.attr("class","poptable")
+			table.property("cellspacing",5)
+			var row = table.append("row")
+			addRowData(row,ts);
+			var bardata = getBarData(ts.values)
+			//console.log(bardata)
+			var svg1 = div.append("svg")
+			.attr("width", width + margin.left + margin.right)
+			.attr("height", height + margin.top + margin.bottom);
+			
+			var svg2 = svg1.append("g")
+					.attr("class", "main")
+					.attr("transform", "translate(" + margin.left + "," + margin.top + ")");		
+					
+			svg2.append("g")
+					.attr("class", "y axis")
+					.call(yAxis)
+					.append("text")
+					.attr("transform", "rotate(-90)")
+					.attr("y", 6)
+					.attr("dy", ".71em")
+					.style("text-anchor", "end");
+					
+			svg2.append("g")
+				.attr("class", "x axis")
+				.attr("transform", "translate(0," + height + ")")
+				.call(xAxis);
+				
+			var bars = svg2.append("g").attr("class", "bars");
+			
+			["TSAIJ","TSAEJ","NOSAIJ","NOSAEJ"].forEach(function(name){
+				var options = {
+					index: i,
+					name: name,
+					fillFxn: function(dd){
+						var colorfxn = d3.scale.ordinal().domain(["dummy","NOSAEJ","NOSAIJ","TSAEJ","TSAIJ"].reverse()).range(colorbrewer.Blues[5]);
+						return colorfxn(name)
+					}				
+				}
+				doBars(bars,bardata[name],x,y,options)
+			})
+			div.append("hr")
+		})
+		
+		
+}
+function loadPop(s){
+	d3.select("#popdivs").selectAll("div").remove();
+	var option = s.options[s.selectedIndex]
+	var popid = option.value
+	params.popid = popid;
+	console.log(popid)
+	d3.select("#poplabel").html(option.label + " (" + s.name + ")")
+	m.getSpawnerAbundanceSinglePop(+popid,1995,2019,[processData,showBest,showTimeseries,showMethodTable])
+} 
+
+</script>
+  </head>
+  <body>
+    <div>
+		<br/>Salmon, Chinook (Snake River Fall-run ESU) <select name = "Chinook Salmon (Snake River Fall-run ESU)" onchange="loadPop(this);">
+		<option value="1">Snake River Lower Mainstem</option>
+		<option value="1">Snake River Lower Mainstem</option>
+		</select>
+		<br/>Salmon, Chinook (Snake River spring/summer-run ESU) <select name = "Salmon, Chinook (Snake River spring/summer-run ESU)" onchange="loadPop(this);">
+		<option value="2">Lapwai/Big Canyon Creeks - unknown</option>
+		<option value="3">Lawyer Creek - unknown</option>
+		<option value="4">Potlatch River - unknown</option>
+		<option value="5">South Fork Clearwater River Upper Mainstem - unknown</option>
+		<option value="6">Big Sheep Creek - spring</option>
+		<option value="7">Catherine Creek - spring</option>
+		<option value="8">Grande Ronde River Upper Mainstem - spring</option>
+		<option value="9">Imnaha River Mainstem - spring/summer</option>
+		<option value="10">Lookingglass Creek - unknown</option>
+		<option value="11">Wallowa/Lostine Rivers - spring</option>
+		<option value="12">Minam River - spring</option>
+		<option value="13">Wenaha River - spring</option>
+		<option value="14">Asotin Creek - spring</option>
+		<option value="15">Tucannon River - spring</option>
+		<option value="16">Bear Valley Creek - spring</option>
+		<option value="17">Big Creek - spring/summer</option>
+		<option value="18">Camas Creek - spring/summer</option>
+		<option value="19">Chamberlain Creek - spring</option>
+		<option value="20">Loon Creek - spring/summer</option>
+		<option value="21">Marsh Creek - spring</option>
+		<option value="22">Middle Fork Salmon River Lower Mainstem - spring/summer</option>
+		<option value="23">Middle Fork Salmon River Upper Mainstem - spring</option>
+		<option value="24">Sulphur Creek - spring</option>
+		<option value="25">East Fork South Fork Salmon River - summer</option>
+		<option value="26">Little Salmon River - spring/summer</option>
+		<option value="27">Secesh River - summer</option>
+		<option value="28">South Fork Salmon River - summer</option>
+		<option value="29">East Fork Salmon River - spring/summer</option>
+		<option value="30">Lemhi River - spring</option>
+		<option value="31">North Fork Salmon River - spring</option>
+		<option value="32">Pahsimeroi River - summer</option>
+		<option value="33">Panther Creek - unknown</option>
+		<option value="34">Salmon River Lower Mainstem - spring/summer</option>
+		<option value="35">Salmon River Upper Mainstem - spring</option>
+		<option value="36">Valley Creek - spring/summer</option>
+		<option value="37">Yankee Fork - spring</option>
+		<option value="38">Lochsa River - unknown</option>
+		<option value="39">Lolo Creek - unknown</option>
+		<option value="40">North Fork Clearwater River Lower Mainstem - unknown</option>
+		<option value="41">Meadow Creek - unknown</option>
+		<option value="42">Moose Creek - unknown</option>
+		<option value="43">North Fork Clearwater River Upper Mainstem - unknown</option>
+		<option value="44">Selway River Upper Mainstem - unknown</option>		
+		</select>
+		<br/>Salmon, Chinook (Upper Columbia River spring-run ESU) <select name = "Salmon, Chinook (Upper Columbia River spring-run ESU)" onchange="loadPop(this);">
+		<option value="45">Entiat River - spring</option>
+		<option value="46">Methow River - spring</option>
+		<option value="47">Wenatchee River - spring</option>
+		</select>
+		<br/>Salmon, Chinook (Lower Columbia River ESU) <select name = "Salmon, Chinook (Lower Columbia River ESU)" onchange="loadPop(this);">
+		<option value="212">Cispus River - spring</option>
+		<option value="213">Coweeman River - fall</option>
+		<option value="214">Kalama River - fall</option>
+		<option value="215">Kalama River - spring</option>
+		<option value="216">Lewis River - late fall</option>
+		<option value="217">Lewis River - fall</option>
+		<option value="218">Lower Cowlitz River - fall</option>
+		<option value="219">North Fork Lewis River - spring</option>
+		<option value="220">Salmon Creek - fall</option>
+		<option value="221">Sandy River - late fall</option>
+		<option value="222">Sandy River - fall</option>
+		<option value="223">Sandy River - spring</option>
+		<option value="224">Tilton River - spring</option>
+		<option value="225">Toutle River - fall</option>
+		<option value="226">Toutle River - spring</option>
+		<option value="227">Upper Cowlitz River - fall</option>
+		<option value="228">Upper Cowlitz River - spring</option>
+		<option value="229">Washougal River - fall</option>
+		<option value="230">Big Creek - fall</option>
+		<option value="232">Clatskanie River - fall</option>
+		<option value="233">Elochoman River - fall</option>
+		<option value="234">Grays and Chinook Rivers - fall</option>
+		<option value="235">Mill, Abernathy, and Germany Creeks - fall</option>
+		<option value="236">Scappoose Creek - fall</option>
+		<option value="237">Youngs Bay - fall</option>
+		<option value="238">Hood River - fall</option>
+		<option value="239">Hood River - spring</option>
+		<option value="240">Lower Gorge Tributaries - fall</option>
+		<option value="241">Upper Gorge Tributaries - fall</option>
+		<option value="242">White Salmon River - fall</option>
+		<option value="243">White Salmon River - spring</option>
+		<option value="244">Clackamas River - fall</option>
+		</select>
+		<br/>Steelhead (Snake River Basin DPS) <select name = "Steelhead (Snake River Basin DPS)" onchange="loadPop(this);">
+		<option value="77">Clearwater River Lower Mainstem - summer</option>
+		<option value="78">Lochsa River - summer</option>
+		<option value="79">Lolo Creek - summer</option>
+		<option value="80">North Fork Clearwater River - summer</option>
+		<option value="81">Selway River - summer</option>
+		<option value="82">South Fork Clearwater River - summer</option>
+		<option value="83">Grande Ronde River Lower Mainstem - summer</option>
+		<option value="84">Grande Ronde River Upper Mainstem - summer</option>
+		<option value="85">Joseph Creek - summer</option>
+		<option value="86">Wallowa River - summer</option>
+		<option value="87">Hells Canyon - summer</option>
+		<option value="89">Imnaha River - summer</option>
+		<option value="90">Asotin Creek - summer</option>
+		<option value="91">Tucannon River - summer</option>
+		<option value="92">Middle Fork Salmon River Lower Mainstem - summer</option>
+		<option value="93">Chamberlain Creek - summer</option>
+		<option value="94">East Fork Salmon River - summer</option>
+		<option value="95">Lemhi River - summer</option>
+		<option value="96">Little Salmon River - summer</option>
+		<option value="97">Middle Fork Salmon River Upper Mainstem - summer</option>
+		<option value="98">North Fork Salmon River - summer</option>
+		<option value="99">Pahsimeroi River - summer</option>
+		<option value="100">Panther Creek - summer</option>
+		<option value="101">Salmon River Upper Mainstem - summer</option>
+		<option value="102">Secesh River - summer</option>
+		<option value="103">South Fork Salmon River - summer</option>
+		</select>
+		<br/>Steelhead (Middle Columbia River DPS) <select name = "Steelhead (Middle Columbia River DPS)" onchange="loadPop(this);">
+		<option value="57">Crooked River - summer</option>
+		<option value="58">Deschutes River Eastside - summer</option>
+		<option value="59">Deschutes River Westside - summer</option>
+		<option value="60">Fifteenmile Creek - winter</option>
+		<option value="61">Klickitat River - summer and winter</option>
+		<option value="62">Rock Creek - summer</option>
+		<option value="63">White Salmon River - summer</option>
+		<option value="64">John Day River Lower Mainstem Tributaries - summer</option>
+		<option value="65">John Day River Upper Mainstem - summer</option>
+		<option value="66">Middle Fork John Day River - summer</option>
+		<option value="67">North Fork John Day River - summer</option>
+		<option value="68">South Fork John Day River - summer</option>
+		<option value="69">Touchet River - summer</option>
+		<option value="70">Umatilla River - summer</option>
+		<option value="71">Walla Walla River - summer</option>
+		<option value="72">Willow Creek - summer</option>
+		<option value="73">Naches River - summer</option>
+		<option value="74">Satus Creek - summer</option>
+		<option value="75">Toppenish Creek - summer</option>
+		<option value="76">Yakima River Upper Mainstem - summer</option>
+		</select>		
+		<br/>Steelhead (Upper Columbia River DPS) <select name = "Steelhead (Upper Columbia River DPS)" onchange="loadPop(this);">
+		<option value="104">Crab Creek - summer</option>
+		<option value="105">Entiat River - summer</option>
+		<option value="106">Methow River - summer</option>
+		<option value="107">Okanogan River - summer</option>
+		<option value="108">Wenatchee River - summer</option>
+		</select>		
+		<br/>Steelhead (Lower Columbia River DPS) <select name = "Steelhead (Lower Columbia River DPS)" onchange="loadPop(this);">
+		<option value="293">Cispus River - winter</option>
+		<option value="294">Coweeman River - winter</option>
+		<option value="295">East Fork Lewis River - summer</option>
+		<option value="296">East Fork Lewis River - winter</option>
+		<option value="297">Kalama River - summer</option>
+		<option value="298">Kalama River - winter</option>
+		<option value="299">Lower Cowlitz River - winter</option>
+		<option value="300">North Fork Lewis River - summer</option>
+		<option value="301">North Fork Lewis River - winter</option>
+		<option value="302">North Fork Toutle River - winter</option>
+		<option value="303">Salmon Creek - winter</option>
+		<option value="304">Sandy River - winter</option>
+		<option value="305">South Fork Toutle River - winter</option>
+		<option value="306">Tilton River - winter</option>
+		<option value="307">Upper Cowlitz River - winter</option>
+		<option value="308">Washougal River - summer</option>
+		<option value="309">Washougal River - winter</option>
+		<option value="310">Hood River - summer</option>
+		<option value="311">Hood River - winter</option>
+		<option value="312">Lower Gorge Tributaries - winter</option>
+		<option value="313">Upper Gorge Tributaries - winter</option>
+		<option value="314">Wind River - summer</option>
+		<option value="315">Clackamas River - winter</option>
+		</select>		
+		<br/>Salmon, Chinook (Upper Willamette River ESU) <select name = "Salmon, Chinook (Upper Willamette River ESU)" onchange="loadPop(this);">
+		<option value="245">Calapooia River - spring</option>
+		<option value="246">Clackamas River - spring</option>
+		<option value="247">McKenzie River - spring</option>
+		<option value="248">Middle Fork Willamette River - spring</option>
+		<option value="249">Molalla River - spring</option>
+		<option value="250">North Santiam River - spring</option>
+		<option value="251">South Santiam River - spring</option>
+		</select>
+		<br/>Salmon, sockeye (Snake River ESU) <select name = "Salmon, sockeye (Snake River ESU)" onchange="loadPop(this);">
+		<option value="51">Alturas Lake - summer</option>
+		<option value="52">Hell Roaring Lake - summer</option>
+		<option value="53">Pettit Lake - summer</option>
+		<option value="54">Redfish Lake - summer</option>
+		<option value="55">Stanley Lake - summer</option>
+		<option value="56">Yellow Belly Lake - summer</option>
+		</select>		
+		<br/>Salmon, chum (Columbia River ESU) <select name = "Salmon, chum (Columbia River ESU)" onchange="loadPop(this);">
+		<option value="252">Cowlitz River - fall</option>
+		<option value="253">Kalama River - fall</option>
+		<option value="254">Lewis River - fall</option>
+		<option value="255">Salmon Creek - fall</option>
+		<option value="256">Sandy River - fall</option>
+		<option value="257">Washougal River - fall</option>
+		<option value="258">Big Creek - fall</option>
+		<option value="259">Clatskanie River - fall</option>
+		<option value="260">Elochoman River - fall</option>
+		<option value="261">Grays and Chinook Rivers - fall</option>
+		<option value="262">Mill, Abernathy, and Germany Creeks - fall</option>
+		<option value="263">Scappoose Creek - fall</option>
+		<option value="264">Youngs Bay - fall</option>
+		<option value="265">Lower Gorge Tributaries - fall</option>
+		<option value="266">Upper Gorge Tributaries - fall</option>
+		<option value="267">Clackamas River - fall</option>
+		</select>
+		<br/>Salmon, coho (Lower Columbia River ESU) <select name = "Salmon, coho (Lower Columbia River ESU)" onchange="loadPop(this);">
+		<option value="268">Cispus River - early and late</option>
+		<option value="269">Coweeman River - late</option>
+		<option value="270">East Fork Lewis River - early and late</option>
+		<option value="271">Kalama River - late</option>
+		<option value="272">Lower Cowlitz River - late</option>
+		<option value="273">North Fork Lewis River - early and late</option>
+		<option value="274">North Fork Toutle River - early and late</option>
+		<option value="275">Salmon Creek - late</option>
+		<option value="276">Sandy River - early and late</option>
+		<option value="277">South Fork Toutle River - early and late</option>
+		<option value="278">Tilton River - early and late</option>
+		<option value="279">Upper Cowlitz River - early and late</option>
+		<option value="280">Washougal River - late</option>
+		<option value="281">Big Creek - late</option>
+		<option value="282">Clatskanie River - late</option>
+		<option value="283">Elochoman River - late</option>
+		<option value="284">Grays and Chinook Rivers - late</option>
+		<option value="285">Mill, Abernathy, and Germany Creeks - late</option>
+		<option value="286">Scappoose Creek - late</option>
+		<option value="287">Youngs Bay - late</option>
+		<option value="288">Lower Gorge Tributaries - late</option>
+		<option value="290">Oregon Upper Gorge Tributaries and Hood River - early</option>
+		<option value="291">Washington Upper Gorge Tributaries and White Salmon River - late</option>
+		<option value="292">Clackamas River - early and late</option>
+		</select>
+		<br/>Steelhead (Upper Willamette River DPS) <select name = "Steelhead (Upper Willamette River DPS)" onchange="loadPop(this);">
+		<option value="316">Calapooia River - winter</option>
+		<option value="317">Molalla River - winter</option>
+		<option value="318">North Santiam River - winter</option>
+		<option value="319">South Santiam River - winter</option>
+		</select>		
+	</div>
+	<h3 id="poplabel"></h3>
+	<div id="popdivs"></div>
+  </body>
+  <script>
+var tipdiv = d3.select("body").append("div")   
+    .attr("class", "tooltip")               
+    .style("opacity", 0); 
+
+function createTable(target,tableData) {
+  var table = document.createElement('table');
+  var tableBody = document.createElement('tbody');
+
+  tableData.forEach(function(rowData) {
+    var row = document.createElement('tr');
+
+    rowData.forEach(function(cellData) {
+      var cell = document.createElement('td');
+      cell.appendChild(document.createTextNode(cellData));
+      row.appendChild(cell);
+    });
+
+    tableBody.appendChild(row);
+  });
+
+  table.appendChild(tableBody);
+  target.appendChild(table);
+}
+
+function toDataRows(_data){
+	var data = []
+
+}
+
+var writeCSV = function(datarows, filename){
+//from https://stackoverflow.com/questions/14964035/how-to-export-javascript-array-info-to-csv-on-client-side
+//const rows = [["name1", "city1", "some other info"], ["name2", "city2", "more info"]];
+let csvContent = "data:text/csv;charset=utf-8,";
+datarows.forEach(function(rowArray){
+   let row = rowArray.join(",");
+   csvContent += row + "\r\n";
+});
+
+var encodedUri = encodeURI(csvContent);
+var link = document.createElement("a");
+link.setAttribute("href", encodedUri);
+link.setAttribute("download", filename);
+document.body.appendChild(link); // Required for FF
+
+link.click(); // This will download the data file named "my_data.csv".
+
+}
+
+const m = new MongoConnector("salmo1-kulug","Salmonetics","SpawnerAbundance")
+m.getSpawnerAbundanceSinglePop(1,1995,2019,[processData,showBest,showTimeseries,showMethodTable])	
+  </script>
+</html>
