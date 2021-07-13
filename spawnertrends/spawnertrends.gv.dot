@@ -1,0 +1,93 @@
+digraph {
+  node [ fontname="Handlee" ];
+  compound=true
+
+     sps_download [label="NOAA SPS Download"];
+     cax_download [label="CAX Full Download"];
+
+
+ 
+      
+  subgraph cluster_backend {
+    label="R (local)";
+    rankdir="LR"
+    subgraph cluster_CAX {
+        fillcolor="#CFD8DC"
+        style="filled"
+        fontcolor="black"        
+        label="Preprocess CAX"
+        export_cax [label="Excel Export" shape=polygon];
+        nosa_csv [label="NOSA CSV"]
+        
+    }
+    
+    subgraph cluster_SPS{
+        fillcolor="#CFD8DC"
+        style="filled"
+        fontcolor="black"        
+        label="Preprocess SPS"
+        export_sps [label="CSV Export" shape=polygon];
+        pop_csv [label="Populations CSV"]
+        merge_pops [label="Merge"]
+    }
+    
+    subgraph cluster_best{
+        fillcolor="#CFD8DC"
+        style="filled"
+        fontcolor="black"        
+        label="Set Best Data"
+        
+    }    
+
+  }
+  
+    subgraph cluster_back2{
+        label="R (local)"
+        query_mongo [shape=rectangle label="Query Best Data" fillcolor="#CFD8DC"
+    style="filled" fontcolor="black"]
+        geomeans [label="Calculate Geomeans" shape=rectangle fillcolor="#CFD8DC"
+    style="filled" fontcolor="black"]
+    }
+  
+  subgraph cluster_onefish {
+    label="OneFishTwoFish Website" 
+    html [shape=rectangle label="HTML\nJavascript"]
+    csv [shape=rectangle label="CSV File" fillcolor="#CFD8DC"
+    style="filled" fontcolor="black"]
+  }
+  
+  load_page [label="Load Page in Browser"]
+
+  
+  subgraph cluster_MongoDB{
+        fillcolor="#CFD8DC"
+        style="filled"
+        fontcolor="black"        
+        label="MongoDB"
+        spawners[label="Spawners Collection" shape=polygon];
+  }
+  
+  subgraph cluster_postprocss{
+      
+  }
+  
+  best_csv [label="Best Data CSV"]
+  
+  cax_download -> export_cax;
+  sps_download -> export_sps
+  export_cax -> nosa_csv
+  export_cax -> pop_csv
+  pop_csv -> merge_pops
+  nosa_csv -> spawners [label="Upload Entries"]
+  export_sps -> merge_pops
+  export_sps -> pop_csv  [style=invis]
+  merge_pops -> spawners [label="Upload Entries"]
+  best_csv -> query_mongo
+  spawners -> query_mongo
+  query_mongo -> geomeans
+  geomeans -> csv
+
+  html -> load_page
+  csv -> load_page
+
+}
