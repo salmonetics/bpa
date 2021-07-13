@@ -47,6 +47,8 @@ digraph {
     style="filled" fontcolor="black"]
         geomeans [label="Calculate Geomeans" shape=rectangle fillcolor="#CFD8DC"
     style="filled" fontcolor="black"]
+    set_best [shape=rectangle label="Set Best Data"  fillcolor="#CFD8DC"
+    style="filled" fontcolor="black"]
     }
   
   subgraph cluster_onefish {
@@ -64,14 +66,14 @@ digraph {
         style="filled"
         fontcolor="black"        
         label="MongoDB"
-        spawners[label="Spawners Collection" shape=polygon];
+        spawners[label="Spawner Estimates" shape=polygon];
   }
   
   subgraph cluster_postprocss{
       
   }
   
-  best_csv [label="Best Data CSV"]
+  best_csv [label="Best Data Comfig FIle"]
   
   cax_download -> export_cax;
   sps_download -> export_sps
@@ -82,7 +84,9 @@ digraph {
   export_sps -> merge_pops
   export_sps -> pop_csv  [style=invis]
   merge_pops -> spawners [label="Upload Entries"]
-  best_csv -> query_mongo
+  best_csv -> set_best
+  set_best -> spawners
+  set_best -> query_mongo  [style=invis]
   spawners -> query_mongo
   query_mongo -> geomeans
   geomeans -> csv
