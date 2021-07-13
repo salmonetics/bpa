@@ -165,6 +165,11 @@ getCAX <- function(df){
   return(df1)
 }
 
+var best <- data.frame()
+for(i in 1:nrow(testbest){
+  
+  }
+
 getNPT <- function(df){
   #df$NOSAEJ <- ifelse(df$Species != "Chinook",df$NOSAIJ,NA)
   df$NOSAEJ <- df$NOSAIJ
