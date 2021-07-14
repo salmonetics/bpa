@@ -59,7 +59,8 @@ digraph {
   }
   
   load_page [label="Load Page in Browser"]
-
+  targets [label="Viability Targets"]
+  gis [label="Population GIS"]
   
   subgraph cluster_MongoDB{
         fillcolor="#CFD8DC"
@@ -90,6 +91,8 @@ digraph {
   spawners -> query_mongo
   query_mongo -> geomeans
   geomeans -> csv
+  targets -> html
+  gis -> html
 
   html -> load_page
   csv -> load_page
