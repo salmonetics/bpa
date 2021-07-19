@@ -47,8 +47,8 @@ digraph {
       request_daily [label="Request Daily\nCounts"]
   }
 
-  adult_annual -> annual_query [lhead=cluster_annual];
-  adult_daily -> daily_query  [lhead=cluster_daily]
+  adult_annual -> annual_query [lhead=cluster_annual label="(1) all years\ncumulative counts"]
+  adult_daily -> daily_query  [lhead=cluster_daily label="(2) all years\ndaily counts"]
   daily_query -> generate_daily_cums
   annual_query -> geomean
   geomean -> generate_annual_summary
@@ -56,7 +56,7 @@ digraph {
   generate_annual_summary -> csv [ltail=cluster_annual]
   html -> load_page
   csv -> load_page
-  adult_annual -> load_page [label="current year\ncumulative counts"]
-  adult_daily -> request_daily [label="single year\ncounts,flow,temp"]
+  adult_annual -> load_page [label="(3) current YTD\ncumulative counts"]
+  adult_daily -> request_daily [label="single year\n(4) counts\n(5) flow,temp"]
   cum_folder -> load_page
 }
